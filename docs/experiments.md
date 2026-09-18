@@ -37,3 +37,38 @@ The specification currently describes container, separators, key/value rules, st
 The model is no longer tied to one decoder per named format. In principle, a new format can be described by a specification and supplied to the same conditional decoder.
 
 This is **not yet proof of arbitrary unseen-format generation**. The next experiment should hold out a format specification during training and evaluate whether a sufficiently expressive specification produces useful reconstruction.
+
+
+## Phase 5 — live streaming and online adaptation
+
+Phase 5 introduces a bounded stream buffer and a conservative online adaptation loop.
+
+Architecture:
+
+```
+live records → bounded buffer → feature encoder
+                               ↓
+                         shared latent
+                               ↓
+format specification → spec encoder
+                               ↓
+                       conditional decoder
+```
+
+Run:
+
+```bash
+python scripts/run_live_demo.py
+```
+
+The demo reports:
+- pre-adaptation reconstruction error
+- online adaptation loss history
+- post-adaptation reconstruction error
+- throughput
+- per-record latency
+- bounded stream size
+
+The adapter operates on a bounded recent window and updates only its supplied model objects. It does not claim continual learning or production streaming guarantees yet.
+
+The next phase should introduce genuinely novel/custom format specifications and test whether the model can adapt to them without a pre-registered format decoder.
