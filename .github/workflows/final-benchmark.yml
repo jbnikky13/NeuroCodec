@@ -1,22 +1,31 @@
 name: NeuroCodec Final Benchmark
+
 on:
   push:
     branches: [main]
     tags: ["v1.0.0"]
   workflow_dispatch:
+
 jobs:
   benchmark:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout frozen submission
+        uses: actions/checkout@v4
         with:
           ref: v1.0.0
-      - uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: pip install -r requirements.txt
-      - name: Run final benchmark\n        env:\n          PYTHONPATH: .\n        run: python scripts/run_final_benchmark.py
-      - uses: actions/upload-artifact@v4
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Run final benchmark
+        env:
+          PYTHONPATH: .
+        run: python scripts/run_final_benchmark.py
+      - name: Upload benchmark artifact
+        uses: actions/upload-artifact@v4
         with:
           name: neurocodec-final-benchmark
           path: artifacts/final-benchmark.json
