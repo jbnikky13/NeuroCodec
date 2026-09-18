@@ -18,32 +18,34 @@ A target format is represented by a machine-readable specification and encoded i
 
 ## Phase 5 — live streaming and online adaptation
 
-A bounded stream buffer and conservative recent-window adaptation loop were added. Latency, throughput and pre/post adaptation error can now be measured.
+A bounded stream buffer and conservative recent-window adaptation loop were added.
 
 ## Phase 6 — unregistered custom format
 
-Phase 6 removes the assumption that a target format must exist in the codec registry.
+The system can accept a runtime format specification without requiring a pre-registered codec.
 
-The experiment defines a novel format at runtime:
+## Phase 7 — robustness and adversarial benchmarking
 
-- field separator: `~`
-- key/value delimiter: `=>`
-- plain strings
-- plain numbers
-- no nested structures
+Phase 7 adds a repeatable robustness suite covering:
 
-No codec named `neuropipe-v1` is registered.
+- unseen Unicode separators
+- multi-character delimiters
+- delimiter collisions
+- invalid empty separators
+- invalid empty key/value delimiters
+- output finiteness
+- inference latency
+- throughput
+- aggregate pass rate
 
 Run:
 
 ```bash
-python scripts/run_custom_format.py
+python scripts/run_robustness.py
 ```
 
-The system receives only the format specification and adapts its shared model using example records. A deterministic renderer provides a ground-truth textual representation for verification.
+The adversarial suite intentionally contains both valid and invalid specifications. A rejected invalid specification is a successful robustness outcome; therefore pass rate measures correct handling of test cases, not raw acceptance.
 
-### What this proves—and what it does not
+This phase does not claim superiority over conventional codecs. It creates measurable controls that can support that comparison later.
 
-This demonstrates the software path for an unregistered specification and measures adaptation of the shared representation. It does **not** yet prove zero-shot arbitrary byte-level generation. The decoder still operates in the learned feature space, while the deterministic renderer produces the exact textual output.
-
-Phase 7 should introduce strict benchmarks against direct pair-specific models and adversarial specifications, including unseen separators, ordering rules, escaping and type constraints.
+The next phase should expose the research pipeline through a production API and interactive demo, while preserving the benchmark suite as regression tests.
