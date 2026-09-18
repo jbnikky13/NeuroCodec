@@ -2,33 +2,43 @@
 
 ## Phase 1.5 — latent reconstruction baseline
 
-A trainable parallel encoder/decoder learns to reconstruct deterministic feature representations from the shared latent space.
+A trainable parallel encoder/decoder learns to reconstruct deterministic feature representations from a shared latent space.
 
 ## Phase 2 — learned format decoder baseline
 
-Phase 2 introduces separate learned decoder heads for JSON, CSV and the custom pipe format. The current heads reconstruct a common feature target. This is an intermediate control experiment: it tests whether multiple format-specific heads can share one representation without changing the encoder.
+Separate learned decoder heads were introduced for JSON, CSV and PIPE. The heads reconstruct format-specific numeric targets.
+
+## Phase 3 — held-out format experiment
+
+The first controlled generalization experiment deliberately withholds one format from training.
+
+Default experiment:
+
+```
+TRAIN: JSON + CSV
+HOLD OUT: PIPE
+```
 
 Run:
 
 ```bash
-python scripts/train_format_experiment.py
+python scripts/run_heldout_experiment.py
 ```
 
-### Important limitation
+The held-out format still has a target representation generated from its codec, but **no decoder for that format is trained**. This prevents accidental leakage.
 
-The current heads do not yet emit raw JSON/CSV/pipe bytes. They reconstruct the canonical feature space. This prevents us from confusing an architectural baseline with actual format generation.
+### Important interpretation
 
-### Next: held-out format experiment
+A held-out target is not automatically proof of zero-shot translation. The current phase establishes the experimental split and measures the learned representation. A genuine zero-shot decoder requires an explicit mechanism for mapping an unseen format description/specification into the latent/decoder space.
 
-The next model will train against codec-specific representations, deliberately withhold one target representation, and evaluate whether the shared latent space supports reconstruction of that unseen representation.
+That mechanism is the next research step.
 
-Report:
-- field recovery
-- type recovery
-- value error
-- structural similarity
-- latent reconstruction error
+Metrics:
+- MSE
+- MAE
+- RMSE
+- cosine similarity
 - inference latency
-- adaptation/training time
+- parameter count
 
-A direct pair-specific model will be kept as a baseline so any improvement can be compared fairly.
+A direct pair-specific baseline will be added before making any comparative claim.
