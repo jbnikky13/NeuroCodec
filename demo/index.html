@@ -1,0 +1,11 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>NeuroCodec</title>
+<style>body{font-family:system-ui;max-width:900px;margin:40px auto;padding:0 18px}textarea,input,button{width:100%;box-sizing:border-box;margin:7px 0;padding:10px}button{cursor:pointer}pre{background:#111;color:#eee;padding:16px;overflow:auto;border-radius:10px}</style></head>
+<body><h1>NeuroCodec</h1><p>Describe a target format, then translate a structured record into it.</p>
+<label>Record</label><textarea id="record" rows="6">{"temperature":24.5,"location":"PH","timestamp":1720000000,"status":"OK"}</textarea>
+<label>Target format specification</label><textarea id="spec" rows="8">{"name":"neuropipe-v1","field_separator":"~","key_value":"=>","strings":"plain","numbers":"plain","nested":"unsupported"}</textarea>
+<button id="go">Translate</button><pre id="out">Ready.</pre>
+<script>
+const $=id=>document.getElementById(id);
+$("go").onclick=async()=>{try{const r=await fetch("/translate",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({record:JSON.parse($("record").value),target_spec:JSON.parse($("spec").value),adapt_steps:0})});$("out").textContent=JSON.stringify(await r.json(),null,2)}catch(e){$("out").textContent=e.toString()}};
+</script></body></html>
