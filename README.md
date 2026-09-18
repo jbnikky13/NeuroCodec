@@ -1,70 +1,76 @@
 # NeuroCodec
 
-**Teaching machines to translate the language of data.**
+**Specification-conditioned neural translation for structured data.**
 
-NeuroCodec is an experimental neural data-translation system. Phase 1 tests whether parallel specialist networks can learn a shared latent representation of structured records and reconstruct the same information in a different encoding.
+NeuroCodec explores whether a shared neural representation can separate **what data means** from **how a target format represents it**.
 
-## Phase 1 research question
+## Core idea
 
-Can structure, semantic, and temporal specialist networks learn complementary representations that can be fused into a shared latent space and decoded into another structured format?
-
-The first prototype supports JSON, CSV, and a compact custom pipe format.
-
-## Architecture
+Instead of building a separate translation model for every pair:
 
 ```
-Input record
-    |
-    +--> Structure specialist
-    +--> Semantic specialist
-    +--> Temporal specialist
-    |
-    v
-Shared latent representation
-    |
-    v
-Target decoder
-    |
-JSON / CSV / custom
+JSON -> CSV
+JSON -> XML
+CSV  -> PIPE
+...
 ```
 
-The prototype deliberately separates **information representation** from **wire encoding**. It does not claim universal format translation yet; unseen-format generalization is a later experiment.
+NeuroCodec represents the target format as a machine-readable specification:
+
+```
+data -> shared latent <- format specification
+                         |
+                         v
+                  conditional decoder
+```
+
+The same pipeline can then adapt to a previously unregistered format specification.
+
+## Current capabilities
+
+- parallel neural data encoder
+- learned format-specification encoder
+- conditional decoder
+- held-out format experiments
+- bounded live-stream adaptation
+- unregistered custom-format adaptation
+- adversarial specification validation
+- FastAPI demonstration API
+- verifiable SHA-256 translation receipts
+- Arc settlement intents without private-key custody
 
 ## Quick start
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate
 pip install -r requirements.txt
 pytest -q
 ```
 
-Run the demo:
+API:
 
 ```bash
-python -m neurocodec.demo
+pip install -r requirements-api.txt
+python scripts/run_api.py
 ```
 
-Run the API:
+Final benchmark:
 
 ```bash
-uvicorn app.api.main:app --reload
+python scripts/run_final_benchmark.py
 ```
 
-Then open the interactive API documentation at `/docs`.
+## Documentation
 
-## Research roadmap
+- `docs/architecture.md`
+- `docs/experiments.md`
+- `docs/demo.md`
+- `docs/arc-settlement.md`
+- `docs/submission.md`
 
-- [x] Parallel specialist model skeleton
-- [x] Shared latent fusion
-- [x] JSON / CSV / custom codec adapters
-- [x] Reconstruction and round-trip validation
-- [ ] Train on paired formats
-- [ ] Hold out a target format during training
-- [ ] Live stream translation
-- [ ] Quantitative semantic/structural metrics
-- [ ] Arc settlement layer for paid machine data transformation
+## Scientific boundary
 
-## Status
+This project is a research prototype. It does not claim perfect zero-shot translation of every arbitrary binary format. Benchmark results should be generated from the supplied commands and reported with their limitations.
 
-Early research prototype. Results are experimental and should not be interpreted as evidence of universal data-format translation.
+## License
+
+See repository license.
