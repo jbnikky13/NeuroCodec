@@ -6,39 +6,34 @@ A trainable parallel encoder/decoder learns to reconstruct deterministic feature
 
 ## Phase 2 — learned format decoder baseline
 
-Separate learned decoder heads were introduced for JSON, CSV and PIPE. The heads reconstruct format-specific numeric targets.
+Separate learned decoder heads were introduced for JSON, CSV and PIPE.
 
 ## Phase 3 — held-out format experiment
 
-The first controlled generalization experiment deliberately withholds one format from training.
+One format is deliberately withheld from training to prevent accidental leakage.
 
-Default experiment:
+## Phase 4 — format-specification conditioning
+
+NeuroCodec now represents a target format through an explicit machine-readable specification and encodes that specification into a learned vector.
+
+Architecture:
 
 ```
-TRAIN: JSON + CSV
-HOLD OUT: PIPE
+Input data ──> Data Encoder ──┐
+                              ├─> Conditional Decoder ─> reconstructed signal
+Format specification ─> Spec Encoder ─┘
 ```
 
 Run:
 
 ```bash
-python scripts/run_heldout_experiment.py
+python scripts/train_spec_conditioned.py
 ```
 
-The held-out format still has a target representation generated from its codec, but **no decoder for that format is trained**. This prevents accidental leakage.
+The specification currently describes container, separators, key/value rules, string/number handling and nesting. The specification encoder is deliberately deterministic at the input boundary so future experiments can replace it with a learned tokenizer or schema parser.
 
-### Important interpretation
+### Research significance
 
-A held-out target is not automatically proof of zero-shot translation. The current phase establishes the experimental split and measures the learned representation. A genuine zero-shot decoder requires an explicit mechanism for mapping an unseen format description/specification into the latent/decoder space.
+The model is no longer tied to one decoder per named format. In principle, a new format can be described by a specification and supplied to the same conditional decoder.
 
-That mechanism is the next research step.
-
-Metrics:
-- MSE
-- MAE
-- RMSE
-- cosine similarity
-- inference latency
-- parameter count
-
-A direct pair-specific baseline will be added before making any comparative claim.
+This is **not yet proof of arbitrary unseen-format generation**. The next experiment should hold out a format specification during training and evaluate whether a sufficiently expressive specification produces useful reconstruction.
