@@ -14,61 +14,36 @@ One format is deliberately withheld from training to prevent accidental leakage.
 
 ## Phase 4 — format-specification conditioning
 
-NeuroCodec now represents a target format through an explicit machine-readable specification and encodes that specification into a learned vector.
-
-Architecture:
-
-```
-Input data ──> Data Encoder ──┐
-                              ├─> Conditional Decoder ─> reconstructed signal
-Format specification ─> Spec Encoder ─┘
-```
-
-Run:
-
-```bash
-python scripts/train_spec_conditioned.py
-```
-
-The specification currently describes container, separators, key/value rules, string/number handling and nesting. The specification encoder is deliberately deterministic at the input boundary so future experiments can replace it with a learned tokenizer or schema parser.
-
-### Research significance
-
-The model is no longer tied to one decoder per named format. In principle, a new format can be described by a specification and supplied to the same conditional decoder.
-
-This is **not yet proof of arbitrary unseen-format generation**. The next experiment should hold out a format specification during training and evaluate whether a sufficiently expressive specification produces useful reconstruction.
-
+A target format is represented by a machine-readable specification and encoded into a learned vector.
 
 ## Phase 5 — live streaming and online adaptation
 
-Phase 5 introduces a bounded stream buffer and a conservative online adaptation loop.
+A bounded stream buffer and conservative recent-window adaptation loop were added. Latency, throughput and pre/post adaptation error can now be measured.
 
-Architecture:
+## Phase 6 — unregistered custom format
 
-```
-live records → bounded buffer → feature encoder
-                               ↓
-                         shared latent
-                               ↓
-format specification → spec encoder
-                               ↓
-                       conditional decoder
-```
+Phase 6 removes the assumption that a target format must exist in the codec registry.
+
+The experiment defines a novel format at runtime:
+
+- field separator: `~`
+- key/value delimiter: `=>`
+- plain strings
+- plain numbers
+- no nested structures
+
+No codec named `neuropipe-v1` is registered.
 
 Run:
 
 ```bash
-python scripts/run_live_demo.py
+python scripts/run_custom_format.py
 ```
 
-The demo reports:
-- pre-adaptation reconstruction error
-- online adaptation loss history
-- post-adaptation reconstruction error
-- throughput
-- per-record latency
-- bounded stream size
+The system receives only the format specification and adapts its shared model using example records. A deterministic renderer provides a ground-truth textual representation for verification.
 
-The adapter operates on a bounded recent window and updates only its supplied model objects. It does not claim continual learning or production streaming guarantees yet.
+### What this proves—and what it does not
 
-The next phase should introduce genuinely novel/custom format specifications and test whether the model can adapt to them without a pre-registered format decoder.
+This demonstrates the software path for an unregistered specification and measures adaptation of the shared representation. It does **not** yet prove zero-shot arbitrary byte-level generation. The decoder still operates in the learned feature space, while the deterministic renderer produces the exact textual output.
+
+Phase 7 should introduce strict benchmarks against direct pair-specific models and adversarial specifications, including unseen separators, ordering rules, escaping and type constraints.
