@@ -1,14 +1,29 @@
 # NeuroCodec Architecture
 
-Phase 1 has four layers:
+```
+Structured input
+      |
+      v
+Parallel data encoder
+      |
+      v
+Shared latent representation <---- Format specification encoder
+      |                                      ^
+      v                                      |
+Conditional decoder -------------------------+
+      |
+      v
+Target representation
+      |
+      +----> benchmark metrics
+      |
+      +----> translation receipt
+                    |
+                    v
+             SHA-256 digest
+                    |
+                    v
+             Arc settlement intent
+```
 
-1. **Codecs** convert JSON, CSV and the custom pipe representation to canonical records.
-2. **Feature layer** creates a deterministic baseline vector.
-3. **Parallel specialists** independently process structure, semantic and temporal signals.
-4. **Fusion** combines the specialist outputs into a shared latent vector.
-
-The current translator uses the canonical record as the reconstruction bridge. This establishes a measurable baseline before learned decoders are trained.
-
-## Next experiment
-
-Replace the deterministic feature baseline with trainable representation learning and add decoder heads trained on paired and held-out formats. The held-out-format test is designed to distinguish transferable representations from simple pair memorization.
+The streaming adapter supplies recent observations for bounded online adaptation. The API exposes the research pipeline without making blockchain state part of the neural model.
