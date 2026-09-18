@@ -1,21 +1,15 @@
 from __future__ import annotations
 import torch
 from torch import nn
-from ..core.features import record_to_features
 from ..models.parallel import ParallelEncoder
 
 class FormatDecoder(nn.Module):
-    def __init__(self, latent_dim=16, output_dim=16):
+    def __init__(self,latent_dim=16,output_dim=16):
         super().__init__()
         self.net=nn.Sequential(nn.Linear(latent_dim,32),nn.GELU(),nn.Linear(32,output_dim))
     def forward(self,z): return self.net(z)
 
 class LearnedTranslator(nn.Module):
-    """Learned latent translator baseline.
-
-    Each target format gets a decoder head. The shared encoder is trained
-    across format views, allowing held-out-format experiments later.
-    """
     def __init__(self,input_dim=16,latent_dim=16):
         super().__init__()
         self.encoder=ParallelEncoder(input_dim=input_dim,latent_dim=latent_dim)
