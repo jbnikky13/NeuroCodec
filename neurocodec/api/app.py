@@ -8,7 +8,7 @@ from ..translation.custom_adapter import CustomFormatAdapter
 from ..settlement.receipts import create_receipt
 from ..settlement.arc import ArcSettlement
 
-app=FastAPI(title="NeuroCodec API",version="0.8.0",description="Format-independent neural translation research API")
+app=FastAPI(title="NeuroCodec API",version="0.9.0",description="Format-independent neural translation research API")
 adapter=CustomFormatAdapter()
 settlement=ArcSettlement()
 
@@ -16,6 +16,7 @@ class TranslateRequest(BaseModel):
     record:dict
     target_spec:dict
     adapt_steps:int=Field(default=0,ge=0,le=100)
+    job_id:str|None=None
 
 class TranslateResponse(BaseModel):
     rendered:str
