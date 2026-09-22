@@ -36,6 +36,6 @@ def translate(req:TranslateRequest):
         rendered=render_record(req.record,spec)
         receipt=create_receipt(req.job_id or "web-job",req.record,rendered,spec,model_version="neurocodec-1.1.0",chain="arc-mainnet")
         intent=settlement.payment_intent(receipt,"0.01",os.getenv("ARC_RECIPIENT_ADDRESS",""))
-        return {"rendered":rendered,"latent":latent.tolist(),"adaptation_loss":losses,"latency_ms":(perf_counter()-start)*1000,"receipt_digest":receipt.digest(),"receipt":receipt.__dict__,"arc":intent}
+        return {"rendered":rendered,"latent":latent,"adaptation_loss":losses,"latency_ms":(perf_counter()-start)*1000,"receipt_digest":receipt.digest(),"receipt":receipt.__dict__,"arc":intent}
     except ValueError as exc: raise HTTPException(status_code=422,detail=str(exc)) from exc
     except RuntimeError as exc: raise HTTPException(status_code=503,detail=str(exc)) from exc
