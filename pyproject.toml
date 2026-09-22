@@ -9,7 +9,6 @@ description = "Experimental neural translation between structured data represent
 requires-python = ">=3.10"
 dependencies = [
   "numpy>=2.0,<3",
-  "torch>=2.4,<3",
   "pydantic>=2.7,<3",
   "fastapi>=0.115,<1",
   "uvicorn[standard]>=0.30,<1",
