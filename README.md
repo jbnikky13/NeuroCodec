@@ -1,75 +1,63 @@
 # NeuroCodec
 
-**Specification-conditioned neural translation for structured data.**
+**Specification-conditioned neural translation with Arc Mainnet settlement.**
 
-NeuroCodec explores whether a shared neural representation can separate **what data means** from **how a target format represents it**.
+The web app runs the neural translation pipeline and uses **Arc Mainnet** for real USDC settlement.
 
-## Core idea
+- Network: **Arc Mainnet**
+- Chain ID: **5042**
+- RPC: `https://rpc.mainnet.arc.io`
+- USDC: `0x3600000000000000000000000000000000000000`
+- Gas asset: USDC
+- Demo price: **0.01 USDC**
 
-Instead of building a separate translation model for every pair:
+Arc Mainnet is live, and Arc Microgrants requires submitted projects to be deployed and working on Arc Mainnet.
 
-```
-JSON -> CSV
-JSON -> XML
-CSV  -> PIPE
-...
-```
-
-NeuroCodec represents the target format as a machine-readable specification:
+### Payment + provenance
 
 ```
-data -> shared latent <- format specification
-                         |
-                         v
-                  conditional decoder
+record + target specification
+          |
+          v
+      NeuroCodec
+          |
+          v
+ translation + SHA-256 receipt
+          |
+          v
+ user signs 0.01 USDC native transfer
+          |
+          +--> receipt digest in transaction data
+          |
+          v
+       Arc Mainnet
 ```
 
-The same pipeline can then adapt to a previously unregistered format specification.
+The dataset remains off-chain. The Arc transaction provides the payment and carries the receipt digest.
 
-## Current capabilities
+## Deployment
 
-- parallel neural data encoder
-- learned format-specification encoder
-- conditional decoder
-- held-out format experiments
-- bounded live-stream adaptation
-- unregistered custom-format adaptation
-- adversarial specification validation
-- FastAPI demonstration API
-- verifiable SHA-256 translation receipts
-- Arc settlement intents without private-key custody
+Set this Vercel environment variable:
 
-## Quick start
+```
+ARC_RECIPIENT_ADDRESS=0xYOUR_ARC_MAINNET_WALLET
+```
+
+No private key is required. The user's connected wallet signs the payment.
+
+The production app rejects Arc Testnet configuration and only accepts chain ID **5042**.
+
+## Local development
 
 ```bash
 pip install -r requirements.txt
 pytest -q
-```
-
-API:
-
-```bash
-pip install -r requirements-api.txt
 python scripts/run_api.py
 ```
 
-Final benchmark:
+## Research boundary
 
-```bash
-python scripts/run_final_benchmark.py
-```
-
-## Documentation
-
-- `docs/architecture.md`
-- `docs/experiments.md`
-- `docs/demo.md`
-- `docs/arc-settlement.md`
-- `docs/submission.md`
-
-## Scientific boundary
-
-This project is a research prototype. It does not claim perfect zero-shot translation of every arbitrary binary format. Benchmark results should be generated from the supplied commands and reported with their limitations.
+NeuroCodec remains a research prototype and does not claim perfect zero-shot translation of every arbitrary binary format.
 
 ## License
 
