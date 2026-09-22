@@ -4,16 +4,20 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "neurocodec"
-version = "0.1.0"
-description = "Experimental neural translation between structured data representations"
+version = "1.1.0"
+description = "Experimental neural translation between structured data representations with Arc Mainnet settlement"
 requires-python = ">=3.10"
 dependencies = [
   "numpy>=2.0,<3",
   "torch>=2.4,<3",
   "pydantic>=2.7,<3",
   "fastapi>=0.115,<1",
-  "uvicorn[standard]>=0.30,<1",
+  "uvicorn[standard]>=0.30,<1,
 ]
+
+[tool.setuptools.packages.find]
+include = ["neurocodec*"]
+exclude = ["api*", "app*", "demo*", "public*", "tests*"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
