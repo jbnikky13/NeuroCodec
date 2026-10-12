@@ -87,3 +87,47 @@ def test_payment_verification_rejects_invalid_receipt_signature(monkeypatch):
     )
     assert response.status_code == 422
     assert response.json()["detail"] == "Receipt signature is invalid."
+
+
+
+def test_payment_verification_accepts_valid_signed_receipt(monkeypatch):
+    from neurocodec.api.app import _receipt_signature, settlement
+
+    monkeypatch.setenv("ARC_RECIPIENT_ADDRESS", "0x1111111111111111111111111111111111111111")
+    monkeypatch.setenv("NEUROCODEC_RECEIPT_SECRET", "unit-test-secret")
+    digest = "a" * 64
+    signature = _receipt_signature(digest, "unit-test-secret")
+    monkeypatch.setattr(
+        settlement,
+        "verify_payment",
+        lambda *args, **kwargs: {
+            "verified": True,
+            "status": "confirmed",
+            "transaction_hash": args[0],
+        },
+    )
+    response = client.post(
+        "/verify-payment",
+        json={
+            "transaction_hash": "0x" + "1" * 64,
+            "receipt_digest": digest,
+            "receipt_signature": signature,
+        },
+    )
+    assert response.status_code == 200
+    assert response.json()["verified"] is True
+
+
+def test_payment_verification_rejects_malformed_digest(monkeypatch):
+    monkeypatch.setenv("ARC_RECIPIENT_ADDRESS", "0x1111111111111111111111111111111111111111")
+    monkeypatch.setenv("NEUROCODEC_RECEIPT_SECRET", "unit-test-secret")
+    response = client.post(
+        "/verify-payment",
+        json={
+            "transaction_hash": "0x" + "1" * 64,
+            "receipt_digest": "z" * 64,
+            "receipt_signature": "b" * 64,
+        },
+    )
+    assert response.status_code == 422
+    assert "receipt_digest" in response.json()["detail"]
