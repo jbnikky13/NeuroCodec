@@ -74,6 +74,8 @@ def _receipt_signature(digest: str, secret: str) -> str:
 
 
 @app.get("/")
+@app.get("/api")
+@app.get("/api/")
 def root():
     return {
         "service": "neurocodec",
@@ -85,6 +87,7 @@ def root():
 
 
 @app.get("/health")
+@app.get("/api/health")
 def health():
     return {
         "status": "ok",
@@ -100,6 +103,7 @@ def health():
 
 
 @app.get("/config")
+@app.get("/api/config")
 def config():
     recipient = os.getenv("ARC_RECIPIENT_ADDRESS", "")
     secret = os.getenv("NEUROCODEC_RECEIPT_SECRET", "")
@@ -117,6 +121,7 @@ def config():
 
 
 @app.get("/formats")
+@app.get("/api/formats")
 def formats():
     return {
         "formats": [
@@ -153,6 +158,7 @@ def formats():
 
 
 @app.post("/translate")
+@app.post("/api/translate")
 def translate(req: TranslateRequest):
     start = perf_counter()
     try:
@@ -192,6 +198,7 @@ def translate(req: TranslateRequest):
 
 
 @app.post("/verify-payment")
+@app.post("/api/verify-payment")
 def verify_payment(req: VerifyPaymentRequest):
     recipient = os.getenv("ARC_RECIPIENT_ADDRESS", "")
     secret = os.getenv("NEUROCODEC_RECEIPT_SECRET", "")
