@@ -4,6 +4,7 @@ import hashlib
 import hmac
 import json
 import os
+import re
 from time import perf_counter
 from typing import Any
 
@@ -199,6 +200,10 @@ def verify_payment(req: VerifyPaymentRequest):
             status_code=503,
             detail="ARC_RECIPIENT_ADDRESS and NEUROCODEC_RECEIPT_SECRET must be configured.",
         )
+    if not re.fullmatch(r"[0-9a-f]{64}", req.receipt_digest):
+        raise HTTPException(status_code=422, detail="receipt_digest must be a lowercase SHA-256 hex digest.")
+    if not re.fullmatch(r"[0-9a-f]{64}", req.receipt_signature):
+        raise HTTPException(status_code=422, detail="receipt_signature must be a lowercase HMAC-SHA256 hex signature.")
     expected_signature = _receipt_signature(req.receipt_digest, secret)
     if not hmac.compare_digest(expected_signature, req.receipt_signature):
         raise HTTPException(status_code=422, detail="Receipt signature is invalid.")
