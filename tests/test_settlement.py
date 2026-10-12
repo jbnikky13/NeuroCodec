@@ -120,6 +120,7 @@ def test_rpc_call_retries_transient_timeout(monkeypatch):
             raise TimeoutError("temporary timeout")
         return FakeResponse()
 
+    monkeypatch.setenv("ARC_RPC_FALLBACK_URLS", "")
     monkeypatch.setattr(arc_module, "urlopen", flaky_urlopen)
     monkeypatch.setattr(arc_module, "sleep", lambda _seconds: None)
 
@@ -127,17 +128,84 @@ def test_rpc_call_retries_transient_timeout(monkeypatch):
     assert calls["count"] == 2
 
 
-def test_rpc_call_reports_clear_error_after_retries(monkeypatch):
+def test_rpc_call_falls_back_after_primary_times_out(monkeypatch):
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return json.dumps({"jsonrpc": "2.0", "id": 1, "result": "0x13b2"}).encode()
+
+    calls = []
+
+    def primary_fails_then_fallback_succeeds(request, timeout):
+        calls.append(request.full_url)
+        assert timeout == arc_module.RPC_TIMEOUT_SECONDS
+        if request.full_url == arc_module.ARC_MAINNET_RPC:
+            raise TimeoutError("primary unavailable")
+        return FakeResponse()
+
+    monkeypatch.setenv("ARC_RPC_FALLBACK_URLS", "https://fallback.example")
+    monkeypatch.setattr(arc_module, "urlopen", primary_fails_then_fallback_succeeds)
+    monkeypatch.setattr(arc_module, "sleep", lambda _seconds: None)
+
+    assert arc_module._rpc_call(arc_module.ARC_MAINNET_RPC, "eth_chainId", []) == "0x13b2"
+    assert calls == [
+        arc_module.ARC_MAINNET_RPC,
+        arc_module.ARC_MAINNET_RPC,
+        "https://fallback.example",
+    ]
+
+
+def test_rpc_call_skips_endpoint_reporting_wrong_chain(monkeypatch):
+    class FakeResponse:
+        def __init__(self, result):
+            self.result = result
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return json.dumps({"jsonrpc": "2.0", "id": 1, "result": self.result}).encode()
+
+    calls = []
+
+    def wrong_chain_then_correct(request, timeout):
+        calls.append(request.full_url)
+        if request.full_url == arc_module.ARC_MAINNET_RPC:
+            return FakeResponse("0x1")
+        return FakeResponse("0x13b2")
+
+    monkeypatch.setenv("ARC_RPC_FALLBACK_URLS", "https://fallback.example")
+    monkeypatch.setattr(arc_module, "urlopen", wrong_chain_then_correct)
+    monkeypatch.setattr(arc_module, "sleep", lambda _seconds: None)
+
+    assert arc_module._rpc_call(arc_module.ARC_MAINNET_RPC, "eth_chainId", []) == "0x13b2"
+    assert calls == [arc_module.ARC_MAINNET_RPC, "https://fallback.example"]
+
+
+def test_rpc_call_reports_endpoint_diagnostics_after_all_retries(monkeypatch):
     def always_timeout(_request, timeout):
         raise TimeoutError("temporary timeout")
 
+    monkeypatch.setenv("ARC_RPC_FALLBACK_URLS", "https://fallback.example")
     monkeypatch.setattr(arc_module, "urlopen", always_timeout)
     monkeypatch.setattr(arc_module, "sleep", lambda _seconds: None)
 
     try:
         arc_module._rpc_call(arc_module.ARC_MAINNET_RPC, "eth_chainId", [])
     except RuntimeError as exc:
-        assert "failed after 2 attempts" in str(exc)
-        assert "Do not submit another payment" in str(exc)
+        message = str(exc)
+        assert "failed on 2 endpoint(s)" in message
+        assert "TimeoutError: temporary timeout" in message
+        assert "rpc.mainnet.arc.io" in message
+        assert "fallback.example" in message
+        assert "Do not submit another payment" in message
     else:
         raise AssertionError("RPC timeout must produce a clear RuntimeError")
