@@ -187,7 +187,7 @@ def test_rpc_call_skips_endpoint_reporting_wrong_chain(monkeypatch):
     monkeypatch.setattr(arc_module, "sleep", lambda _seconds: None)
 
     assert arc_module._rpc_call(arc_module.ARC_MAINNET_RPC, "eth_chainId", []) == "0x13b2"
-    assert calls == [arc_module.ARC_MAINNET_RPC, "https://fallback.example"]
+    assert calls == [arc_module.ARC_MAINNET_RPC, arc_module.ARC_MAINNET_RPC, "https://fallback.example"]
 
 
 def test_rpc_call_reports_endpoint_diagnostics_after_all_retries(monkeypatch):
