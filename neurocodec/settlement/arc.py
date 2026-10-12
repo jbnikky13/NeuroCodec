@@ -16,6 +16,7 @@ ARC_USDC_DISPLAY_DECIMALS = 6
 ADDRESS_RE = re.compile(r"^0x[0-9a-fA-F]{40}$")
 TX_HASH_RE = re.compile(r"^0x[0-9a-fA-F]{64}$")
 DIGEST_RE = re.compile(r"^[0-9a-f]{64}$")
+SIGNATURE_RE = re.compile(r"^[0-9a-f]{64}$")
 PAYMENT_PREFIX = "neurocodec:"
 
 
@@ -93,7 +94,7 @@ class ArcSettlement:
             raise ValueError("amount_usdc cannot be represented in native USDC units")
 
         return {
-            "ready": bool(recipient),
+            "ready": bool(recipient and os.getenv("NEUROCODEC_RECEIPT_SECRET")),
             "network": "arc-mainnet",
             "chain_id": ARC_MAINNET_CHAIN_ID,
             "rpc_url": self.network.rpc_url,
@@ -109,11 +110,20 @@ class ArcSettlement:
             "mainnet_only": True,
         }
 
-    def verify_payment(self, tx_hash: str, receipt_digest: str, recipient: str, amount_usdc: str = "0.01"):
+    def verify_payment(
+        self,
+        tx_hash: str,
+        receipt_digest: str,
+        receipt_signature: str,
+        recipient: str,
+        amount_usdc: str = "0.01",
+    ):
         if not TX_HASH_RE.fullmatch(tx_hash or ""):
-            raise ValueError("tx_hash must be a 32-byte hexadecimal transaction hash")
+            raise ValueError("transaction_hash must be a 32-byte hexadecimal transaction hash")
         if not DIGEST_RE.fullmatch(receipt_digest or ""):
             raise ValueError("receipt_digest must be a lowercase SHA-256 hex digest")
+        if not SIGNATURE_RE.fullmatch(receipt_signature or ""):
+            raise ValueError("receipt_signature must be a lowercase HMAC-SHA256 hex signature")
         if not ADDRESS_RE.fullmatch(recipient or ""):
             raise ValueError("Configured payment recipient is invalid")
 
@@ -124,7 +134,8 @@ class ArcSettlement:
         if not amount.is_finite() or amount <= 0 or amount.as_tuple().exponent < -ARC_NATIVE_DECIMALS:
             raise ValueError("amount_usdc must be positive and have at most 18 decimal places")
         expected_value = int(amount * (10 ** ARC_NATIVE_DECIMALS))
-        expected_data = "0x" + (PAYMENT_PREFIX + receipt_digest).encode("utf-8").hex()
+        payment_payload = f"{PAYMENT_PREFIX}{receipt_digest}:{receipt_signature}"
+        expected_data = "0x" + payment_payload.encode("utf-8").hex()
 
         chain_id = _rpc_call(self.network.rpc_url, "eth_chainId", [])
         if not isinstance(chain_id, str) or int(chain_id, 16) != ARC_MAINNET_CHAIN_ID:
