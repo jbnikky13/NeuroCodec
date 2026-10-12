@@ -20,7 +20,7 @@ function parseJsonField(id,label){
     if(normalized!==raw){
       try{const parsed=JSON.parse(normalized);field.value=normalized;show("inputHint","Smart quotes were converted to standard JSON quotes. Review the input and try again.");return parsed}catch(_){}
     }
-    const hint=/[“”]/.test(raw)?" Curly quotation marks were found; JSON requires straight double quotes (").":" Check commas, colons, and double quotes.";
+    const hint=/[“”]/.test(raw)?" Curly quotation marks were found; JSON requires standard ASCII double quotes.":" Check commas, colons, and double quotes.";
     throw Error(label+" is not valid JSON."+hint);
   }
 }
