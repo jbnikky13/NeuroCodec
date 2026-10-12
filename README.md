@@ -52,9 +52,10 @@ Optional RPC configuration:
 ```
 ARC_RPC_URL=https://rpc.mainnet.arc.io
 ARC_RPC_FALLBACK_URLS=https://rpc.quicknode.mainnet.arc.io,https://arc.drpc.org
+ARC_INFURA_API_KEY=your_infura_api_key
 ```
 
-The fallback variable is a comma-separated list of trusted Arc Mainnet HTTPS JSON-RPC endpoints. If omitted, the app uses its built-in Arc Mainnet fallback endpoints. Never set it to a testnet URL. If using a provider URL containing an API key, store it in Vercel environment variables, not in source code; error messages log only the hostname, not the URL path.
+The fallback variable is a comma-separated list of trusted Arc Mainnet HTTPS JSON-RPC endpoints. If omitted, the app uses its built-in Arc Mainnet fallback endpoints. Arc RPC access may require a provider API key; configure an Arc-enabled Infura key as `ARC_INFURA_API_KEY` in Vercel to add the authenticated Infura Mainnet endpoint as a fallback. Create an API key at Infura and ensure Arc Mainnet is enabled for that key. Never put the key in source code or public logs. Never set RPCs to a testnet URL. Error messages log only the hostname, not the URL path.
 
 The browser sends a standard native USDC transfer without transaction data. `/api/verify-payment` checks the HMAC signature of the submitted receipt, Arc Mainnet chain ID, transaction recipient, exact amount, and successful mined receipt. The receipt digest is not embedded on-chain; its association with the payment is asserted by the client and validated by the backend signature check. A transaction submission alone is not considered a verified payment. The `/formats` response distinguishes custom format support in the web API from codecs that are only registered in the research library.
 

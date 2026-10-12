@@ -100,6 +100,34 @@ def test_verify_payment_rejects_wrong_recipient(monkeypatch):
     assert result["status"] == "recipient_mismatch"
 
 
+def test_rpc_call_uses_authenticated_infura_fallback(monkeypatch):
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return json.dumps({"jsonrpc": "2.0", "id": 1, "result": "0x13b2"}).encode()
+
+    calls = []
+
+    def provider_response(request, timeout):
+        calls.append(request.full_url)
+        if "arc-mainnet.infura.io/v3/test-key" in request.full_url:
+            return FakeResponse()
+        raise OSError("HTTP 403 Forbidden")
+
+    monkeypatch.setenv("ARC_RPC_FALLBACK_URLS", "")
+    monkeypatch.setenv("ARC_INFURA_API_KEY", "test-key")
+    monkeypatch.setattr(arc_module, "urlopen", provider_response)
+    monkeypatch.setattr(arc_module, "sleep", lambda _seconds: None)
+
+    assert arc_module._rpc_call(arc_module.ARC_MAINNET_RPC, "eth_chainId", []) == "0x13b2"
+    assert calls[-1] == "https://arc-mainnet.infura.io/v3/test-key"
+
+
 def test_rpc_call_retries_transient_timeout(monkeypatch):
     class FakeResponse:
         def __enter__(self):
