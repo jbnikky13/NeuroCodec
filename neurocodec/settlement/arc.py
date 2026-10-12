@@ -58,13 +58,21 @@ def arc_network() -> ArcNetwork:
 
 
 def _rpc_endpoints(primary_url: str) -> list[str]:
-    """Return the configured primary followed by Arc mainnet read endpoints."""
+    """Return configured Arc Mainnet RPCs, including Infura when its key is configured."""
     configured = os.getenv("ARC_RPC_FALLBACK_URLS")
     fallbacks = (
         [item.strip() for item in configured.split(",") if item.strip()]
         if configured is not None
         else list(ARC_MAINNET_FALLBACK_RPCS)
     )
+
+    # Arc's partner-provider RPC endpoints require an API key. Keep the key in
+    # Vercel environment variables and add Infura as an authenticated fallback
+    # when ARC_INFURA_API_KEY is configured.
+    infura_key = os.getenv("ARC_INFURA_API_KEY", "").strip()
+    if infura_key:
+        fallbacks.append(f"https://arc-mainnet.infura.io/v3/{infura_key}")
+
     endpoints = []
     for url in [primary_url, *fallbacks]:
         if not url:
