@@ -17,7 +17,6 @@ ADDRESS_RE = re.compile(r"^0x[0-9a-fA-F]{40}$")
 TX_HASH_RE = re.compile(r"^0x[0-9a-fA-F]{64}$")
 DIGEST_RE = re.compile(r"^[0-9a-f]{64}$")
 SIGNATURE_RE = re.compile(r"^[0-9a-f]{64}$")
-PAYMENT_PREFIX = "neurocodec:"
 
 
 @dataclass(frozen=True)
@@ -134,8 +133,6 @@ class ArcSettlement:
         if not amount.is_finite() or amount <= 0 or amount.as_tuple().exponent < -ARC_NATIVE_DECIMALS:
             raise ValueError("amount_usdc must be positive and have at most 18 decimal places")
         expected_value = int(amount * (10 ** ARC_NATIVE_DECIMALS))
-        payment_payload = f"{PAYMENT_PREFIX}{receipt_digest}:{receipt_signature}"
-        expected_data = "0x" + payment_payload.encode("utf-8").hex()
 
         chain_id = _rpc_call(self.network.rpc_url, "eth_chainId", [])
         if not isinstance(chain_id, str) or int(chain_id, 16) != ARC_MAINNET_CHAIN_ID:
@@ -149,9 +146,6 @@ class ArcSettlement:
             return {"verified": False, "status": "recipient_mismatch", "transaction_hash": tx_hash}
         if int(tx.get("value", "0x0"), 16) != expected_value:
             return {"verified": False, "status": "amount_mismatch", "transaction_hash": tx_hash}
-        if (tx.get("input") or tx.get("data") or "").lower() != expected_data.lower():
-            return {"verified": False, "status": "receipt_digest_mismatch", "transaction_hash": tx_hash}
-
         tx_chain_id = tx.get("chainId")
         if tx_chain_id is not None and int(tx_chain_id, 16) != ARC_MAINNET_CHAIN_ID:
             return {"verified": False, "status": "chain_mismatch", "transaction_hash": tx_hash}
@@ -173,5 +167,6 @@ class ArcSettlement:
             "recipient": recipient,
             "amount": format(amount, "f"),
             "receipt_digest": receipt_digest,
+            "receipt_binding": "server-verified-signed-receipt; digest is submitted to the API and is not embedded in the transaction",
             "block_number": mined.get("blockNumber"),
         }

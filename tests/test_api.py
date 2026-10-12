@@ -131,3 +131,42 @@ def test_payment_verification_rejects_malformed_digest(monkeypatch):
     )
     assert response.status_code == 422
     assert "receipt_digest" in response.json()["detail"]
+
+
+def test_payment_verification_accepts_standard_transfer_without_transaction_data(monkeypatch):
+    from neurocodec.api.app import _receipt_signature
+    from neurocodec.settlement import arc
+
+    recipient = "0x1111111111111111111111111111111111111111"
+    tx_hash = "0x" + "1" * 64
+    digest = "a" * 64
+    signature = _receipt_signature(digest, "unit-test-secret")
+    monkeypatch.setenv("ARC_RECIPIENT_ADDRESS", recipient)
+    monkeypatch.setenv("NEUROCODEC_RECEIPT_SECRET", "unit-test-secret")
+    calls = iter([
+        "0x13b2",
+        {
+            "to": recipient,
+            "value": hex(10**16),
+            "input": "0x",
+            "chainId": "0x13b2",
+        },
+        {
+            "status": "0x1",
+            "transactionHash": tx_hash,
+            "blockNumber": "0x10",
+        },
+    ])
+    monkeypatch.setattr(arc, "_rpc_call", lambda *args: next(calls))
+
+    response = client.post(
+        "/verify-payment",
+        json={
+            "transaction_hash": tx_hash,
+            "receipt_digest": digest,
+            "receipt_signature": signature,
+        },
+    )
+    assert response.status_code == 200
+    assert response.json()["verified"] is True
+    assert response.json()["transaction_hash"] == tx_hash

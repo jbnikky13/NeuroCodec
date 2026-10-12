@@ -27,13 +27,13 @@ record + target specification
           v
  user signs 0.01 USDC native transfer
           |
-          +--> receipt digest in transaction data
+          +--> signed receipt submitted to backend
           |
           v
        Arc Mainnet
 ```
 
-The dataset remains off-chain. The Arc transaction provides the payment and carries the receipt digest.
+The dataset and signed receipt remain off-chain. The Arc transaction provides the payment; the backend verifies the signed receipt separately because Arc rejects transaction data for this internal-account recipient type.
 
 ## Deployment
 
@@ -46,7 +46,7 @@ NEUROCODEC_RECEIPT_SECRET=<long-random-secret>
 
 No private key is required. The user's connected wallet signs the payment. `NEUROCODEC_RECEIPT_SECRET` must be a long, randomly generated secret (keep it private and do not commit it). The API HMAC-signs receipt digests with this secret; payment verification rejects unsigned or invalidly signed receipts. Configure both environment variables in Vercel and redeploy.
 
-The browser sends a native USDC transfer with `neurocodec:<receipt-digest>:<signature>` in transaction data. `/api/verify-payment` checks the signature, Arc Mainnet chain ID, transaction recipient, exact amount, transaction data, and successful mined receipt. A transaction submission alone is not considered a verified payment. The `/formats` response now distinguishes custom format support in the web API from codecs that are only registered in the research library.
+The browser sends a standard native USDC transfer without transaction data. `/api/verify-payment` checks the HMAC signature of the submitted receipt, Arc Mainnet chain ID, transaction recipient, exact amount, and successful mined receipt. The receipt digest is not embedded on-chain; its association with the payment is asserted by the client and validated by the backend signature check. A transaction submission alone is not considered a verified payment. The `/formats` response now distinguishes custom format support in the web API from codecs that are only registered in the research library.
 
 The production app rejects Arc Testnet configuration and only accepts chain ID **5042**.
 
