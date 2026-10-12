@@ -5,6 +5,7 @@ from decimal import Decimal, InvalidOperation
 import json
 import os
 import re
+from time import sleep
 from urllib.error import URLError
 from urllib.request import Request, urlopen
 
@@ -13,6 +14,8 @@ ARC_MAINNET_RPC = "https://rpc.mainnet.arc.io"
 ARC_MAINNET_USDC = "0x3600000000000000000000000000000000000000"
 ARC_NATIVE_DECIMALS = 18
 ARC_USDC_DISPLAY_DECIMALS = 6
+RPC_TIMEOUT_SECONDS = 5
+RPC_ATTEMPTS = 2
 ADDRESS_RE = re.compile(r"^0x[0-9a-fA-F]{40}$")
 TX_HASH_RE = re.compile(r"^0x[0-9a-fA-F]{64}$")
 DIGEST_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -61,14 +64,40 @@ def _rpc_call(rpc_url: str, method: str, params: list):
         headers={"Content-Type": "application/json"},
         method="POST",
     )
-    try:
-        with urlopen(request, timeout=8) as response:
-            payload = json.loads(response.read().decode("utf-8"))
-    except (URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
-        raise RuntimeError("Unable to verify transaction against the Arc Mainnet RPC.") from exc
-    if payload.get("error"):
-        raise RuntimeError("Arc Mainnet RPC rejected the transaction verification request.")
-    return payload.get("result")
+    last_error = None
+
+    # Public RPCs can briefly time out or return transient transport errors.
+    # Retry the same read-only JSON-RPC request once; never resubmit a payment.
+    for attempt in range(RPC_ATTEMPTS):
+        try:
+            with urlopen(request, timeout=RPC_TIMEOUT_SECONDS) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+            if not isinstance(payload, dict):
+                raise ValueError("RPC response was not a JSON object")
+            if payload.get("error"):
+                error = payload["error"]
+                code = error.get("code") if isinstance(error, dict) else None
+                message = error.get("message") if isinstance(error, dict) else str(error)
+                raise RuntimeError(
+                    f"Arc Mainnet RPC rejected {method} (code {code}): {message or 'unknown RPC error'}"
+                )
+            if "result" not in payload:
+                raise ValueError("RPC response did not contain a result")
+            return payload["result"]
+        except RuntimeError:
+            # A structured JSON-RPC error is not necessarily transient; preserve
+            # it rather than masking a configuration or method problem.
+            raise
+        except (URLError, TimeoutError, OSError, json.JSONDecodeError, ValueError) as exc:
+            last_error = exc
+            if attempt + 1 < RPC_ATTEMPTS:
+                sleep(0.25)
+
+    raise RuntimeError(
+        f"Arc Mainnet RPC request '{method}' failed after {RPC_ATTEMPTS} attempts. "
+        "The transaction may still be successful; check Arc Explorer and retry verification "
+        "with the same transaction hash. Do not submit another payment."
+    ) from last_error
 
 
 class ArcSettlement:
