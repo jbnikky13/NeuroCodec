@@ -1,3 +1,5 @@
+import json
+
 import neurocodec.settlement.arc as arc_module
 from neurocodec.settlement.arc import ArcSettlement
 from neurocodec.settlement.receipts import create_receipt
@@ -49,11 +51,10 @@ def test_payment_intent_rejects_non_positive_amount():
 
 
 def test_verify_payment_confirms_matching_mined_transaction(monkeypatch):
-    expected_data = "0x" + f"neurocodec:{DIGEST}:{SIGNATURE}".encode().hex()
     transaction = {
         "to": VALID_ADDRESS,
         "value": hex(10**16),
-        "input": expected_data,
+        "input": "0x",
         "chainId": hex(5042),
     }
     mined_receipt = {
@@ -97,3 +98,46 @@ def test_verify_payment_rejects_wrong_recipient(monkeypatch):
     result = ArcSettlement().verify_payment(TX_HASH, DIGEST, SIGNATURE, VALID_ADDRESS)
     assert result["verified"] is False
     assert result["status"] == "recipient_mismatch"
+
+
+def test_rpc_call_retries_transient_timeout(monkeypatch):
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return json.dumps({"jsonrpc": "2.0", "id": 1, "result": "0x13b2"}).encode()
+
+    calls = {"count": 0}
+
+    def flaky_urlopen(_request, timeout):
+        assert timeout == arc_module.RPC_TIMEOUT_SECONDS
+        calls["count"] += 1
+        if calls["count"] == 1:
+            raise TimeoutError("temporary timeout")
+        return FakeResponse()
+
+    monkeypatch.setattr(arc_module, "urlopen", flaky_urlopen)
+    monkeypatch.setattr(arc_module, "sleep", lambda _seconds: None)
+
+    assert arc_module._rpc_call(arc_module.ARC_MAINNET_RPC, "eth_chainId", []) == "0x13b2"
+    assert calls["count"] == 2
+
+
+def test_rpc_call_reports_clear_error_after_retries(monkeypatch):
+    def always_timeout(_request, timeout):
+        raise TimeoutError("temporary timeout")
+
+    monkeypatch.setattr(arc_module, "urlopen", always_timeout)
+    monkeypatch.setattr(arc_module, "sleep", lambda _seconds: None)
+
+    try:
+        arc_module._rpc_call(arc_module.ARC_MAINNET_RPC, "eth_chainId", [])
+    except RuntimeError as exc:
+        assert "failed after 2 attempts" in str(exc)
+        assert "Do not submit another payment" in str(exc)
+    else:
+        raise AssertionError("RPC timeout must produce a clear RuntimeError")
