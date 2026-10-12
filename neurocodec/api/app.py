@@ -18,7 +18,7 @@ from neurocodec.settlement.receipts import create_receipt
 from neurocodec.translation.custom_adapter import CustomFormatAdapter
 from neurocodec.translation.custom_spec import render_record, validate_custom_spec
 
-APP_VERSION = "1.2.0"
+APP_VERSION = "1.3.0"
 MAX_RECORD_BYTES = 256_000
 MAX_SPEC_BYTES = 32_000
 
@@ -56,6 +56,13 @@ class TranslateRequest(BaseModel):
         if len(encoded.encode("utf-8")) > MAX_SPEC_BYTES:
             raise ValueError(f"target_spec exceeds {MAX_SPEC_BYTES} bytes")
         return value
+
+
+class VerifyPaymentRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    transaction_hash: str = Field(min_length=66, max_length=66)
+    receipt_digest: str = Field(min_length=64, max_length=64)
 
 
 @app.get("/")
@@ -103,10 +110,34 @@ def config():
 def formats():
     return {
         "formats": [
-            {"name": "json", "kind": "registered", "description": "JSON object"},
-            {"name": "csv", "kind": "registered", "description": "CSV records"},
-            {"name": "pipe", "kind": "registered", "description": "key=value|key=value"},
-            {"name": "custom", "kind": "specification-conditioned", "description": "User-defined separator and key/value syntax"},
+            {
+                "name": "custom",
+                "kind": "specification-conditioned",
+                "description": "User-defined separator and key/value syntax",
+                "endpoint": "/translate",
+                "available_in_web_api": True,
+            },
+            {
+                "name": "json",
+                "kind": "registered-codec",
+                "description": "JSON codec in the research translation library",
+                "endpoint": None,
+                "available_in_web_api": False,
+            },
+            {
+                "name": "csv",
+                "kind": "registered-codec",
+                "description": "CSV codec in the research translation library",
+                "endpoint": None,
+                "available_in_web_api": False,
+            },
+            {
+                "name": "pipe",
+                "kind": "registered-codec",
+                "description": "Pipe-delimited codec in the research translation library",
+                "endpoint": None,
+                "available_in_web_api": False,
+            },
         ]
     }
 
@@ -141,6 +172,25 @@ def translate(req: TranslateRequest):
             "receipt": receipt.__dict__,
             "arc": intent,
         }
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.post("/verify-payment")
+def verify_payment(req: VerifyPaymentRequest):
+    recipient = os.getenv("ARC_RECIPIENT_ADDRESS", "")
+    if not recipient:
+        raise HTTPException(status_code=503, detail="ARC_RECIPIENT_ADDRESS is not configured.")
+    try:
+        result = settlement.verify_payment(
+            req.transaction_hash,
+            req.receipt_digest,
+            recipient,
+            amount_usdc="0.01",
+        )
+        return result
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except RuntimeError as exc:
