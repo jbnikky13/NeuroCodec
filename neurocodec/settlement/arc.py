@@ -7,10 +7,16 @@ import os
 import re
 from time import sleep
 from urllib.error import URLError
+from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 
 ARC_MAINNET_CHAIN_ID = 5042
 ARC_MAINNET_RPC = "https://rpc.mainnet.arc.io"
+# Public Arc mainnet endpoints used only for read-only verification requests.
+ARC_MAINNET_FALLBACK_RPCS = (
+    "https://rpc.quicknode.mainnet.arc.io",
+    "https://arc.drpc.org",
+)
 ARC_MAINNET_USDC = "0x3600000000000000000000000000000000000000"
 ARC_NATIVE_DECIMALS = 18
 ARC_USDC_DISPLAY_DECIMALS = 6
@@ -51,6 +57,30 @@ def arc_network() -> ArcNetwork:
     return ArcNetwork(rpc_url=rpc_url)
 
 
+def _rpc_endpoints(primary_url: str) -> list[str]:
+    """Return the configured primary followed by Arc mainnet read endpoints."""
+    configured = os.getenv("ARC_RPC_FALLBACK_URLS")
+    fallbacks = (
+        [item.strip() for item in configured.split(",") if item.strip()]
+        if configured is not None
+        else list(ARC_MAINNET_FALLBACK_RPCS)
+    )
+    endpoints = []
+    for url in [primary_url, *fallbacks]:
+        if not url:
+            continue
+        if not url.lower().startswith("https://") or "testnet" in url.lower():
+            raise RuntimeError("Arc RPC endpoints must use HTTPS and must not target testnet.")
+        if url not in endpoints:
+            endpoints.append(url)
+    return endpoints
+
+
+def _endpoint_label(url: str) -> str:
+    """Expose the host in diagnostics without leaking path-based API keys."""
+    return urlsplit(url).hostname or "configured RPC endpoint"
+
+
 def _rpc_call(rpc_url: str, method: str, params: list):
     body = json.dumps({
         "jsonrpc": "2.0",
@@ -58,46 +88,56 @@ def _rpc_call(rpc_url: str, method: str, params: list):
         "method": method,
         "params": params,
     }).encode("utf-8")
-    request = Request(
-        rpc_url,
-        data=body,
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-    last_error = None
+    endpoints = _rpc_endpoints(rpc_url)
+    failures = []
 
-    # Public RPCs can briefly time out or return transient transport errors.
-    # Retry the same read-only JSON-RPC request once; never resubmit a payment.
-    for attempt in range(RPC_ATTEMPTS):
-        try:
-            with urlopen(request, timeout=RPC_TIMEOUT_SECONDS) as response:
-                payload = json.loads(response.read().decode("utf-8"))
-            if not isinstance(payload, dict):
-                raise ValueError("RPC response was not a JSON object")
-            if payload.get("error"):
-                error = payload["error"]
-                code = error.get("code") if isinstance(error, dict) else None
-                message = error.get("message") if isinstance(error, dict) else str(error)
-                raise RuntimeError(
-                    f"Arc Mainnet RPC rejected {method} (code {code}): {message or 'unknown RPC error'}"
-                )
-            if "result" not in payload:
-                raise ValueError("RPC response did not contain a result")
-            return payload["result"]
-        except RuntimeError:
-            # A structured JSON-RPC error is not necessarily transient; preserve
-            # it rather than masking a configuration or method problem.
-            raise
-        except (URLError, TimeoutError, OSError, json.JSONDecodeError, ValueError) as exc:
-            last_error = exc
-            if attempt + 1 < RPC_ATTEMPTS:
-                sleep(0.25)
+    # These are read-only JSON-RPC calls. Fail over between Arc Mainnet RPCs;
+    # this function never submits or broadcasts a transaction.
+    for endpoint in endpoints:
+        for attempt in range(RPC_ATTEMPTS):
+            request = Request(
+                endpoint,
+                data=body,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            try:
+                with urlopen(request, timeout=RPC_TIMEOUT_SECONDS) as response:
+                    payload = json.loads(response.read().decode("utf-8"))
+                if not isinstance(payload, dict):
+                    raise ValueError("RPC response was not a JSON object")
+                if payload.get("error"):
+                    error = payload["error"]
+                    code = error.get("code") if isinstance(error, dict) else None
+                    message = error.get("message") if isinstance(error, dict) else str(error)
+                    raise ValueError(
+                        f"JSON-RPC error code {code}: {message or 'unknown RPC error'}"
+                    )
+                if "result" not in payload:
+                    raise ValueError("RPC response did not contain a result")
+                result = payload["result"]
+                if method == "eth_chainId":
+                    try:
+                        chain_id = int(result, 16) if isinstance(result, str) else int(result)
+                    except (TypeError, ValueError):
+                        raise ValueError("RPC returned an invalid chain ID")
+                    if chain_id != ARC_MAINNET_CHAIN_ID:
+                        raise ValueError(
+                            f"endpoint reports chain ID {chain_id}, expected {ARC_MAINNET_CHAIN_ID}"
+                        )
+                return result
+            except (URLError, TimeoutError, OSError, json.JSONDecodeError, ValueError) as exc:
+                failures.append(f"{_endpoint_label(endpoint)} attempt {attempt + 1}: {type(exc).__name__}: {exc}")
+                if attempt + 1 < RPC_ATTEMPTS:
+                    sleep(0.25)
 
+    details = "; ".join(failures[-len(endpoints) * RPC_ATTEMPTS:])
     raise RuntimeError(
-        f"Arc Mainnet RPC request '{method}' failed after {RPC_ATTEMPTS} attempts. "
+        f"Arc Mainnet RPC request '{method}' failed on {len(endpoints)} endpoint(s) "
+        f"after up to {RPC_ATTEMPTS} attempt(s) each. Details: {details}. "
         "The transaction may still be successful; check Arc Explorer and retry verification "
         "with the same transaction hash. Do not submit another payment."
-    ) from last_error
+    )
 
 
 class ArcSettlement:
