@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 import os
+import re
 from time import perf_counter
 from typing import Any
 
@@ -18,7 +21,7 @@ from neurocodec.settlement.receipts import create_receipt
 from neurocodec.translation.custom_adapter import CustomFormatAdapter
 from neurocodec.translation.custom_spec import render_record, validate_custom_spec
 
-APP_VERSION = "1.2.0"
+APP_VERSION = "1.3.0"
 MAX_RECORD_BYTES = 256_000
 MAX_SPEC_BYTES = 32_000
 
@@ -58,6 +61,18 @@ class TranslateRequest(BaseModel):
         return value
 
 
+class VerifyPaymentRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    transaction_hash: str = Field(min_length=66, max_length=66)
+    receipt_digest: str = Field(min_length=64, max_length=64)
+    receipt_signature: str = Field(min_length=64, max_length=64)
+
+
+def _receipt_signature(digest: str, secret: str) -> str:
+    return hmac.new(secret.encode("utf-8"), digest.encode("ascii"), hashlib.sha256).hexdigest()
+
+
 @app.get("/")
 def root():
     return {
@@ -87,6 +102,7 @@ def health():
 @app.get("/config")
 def config():
     recipient = os.getenv("ARC_RECIPIENT_ADDRESS", "")
+    secret = os.getenv("NEUROCODEC_RECEIPT_SECRET", "")
     return {
         "network": "arc-mainnet",
         "chain_id": ARC_MAINNET_CHAIN_ID,
@@ -95,7 +111,8 @@ def config():
         "recipient": recipient,
         "price_usdc": "0.01",
         "mainnet_only": True,
-        "payment_ready": bool(recipient),
+        "payment_ready": bool(recipient and secret),
+        "receipt_signing_configured": bool(secret),
     }
 
 
@@ -103,10 +120,34 @@ def config():
 def formats():
     return {
         "formats": [
-            {"name": "json", "kind": "registered", "description": "JSON object"},
-            {"name": "csv", "kind": "registered", "description": "CSV records"},
-            {"name": "pipe", "kind": "registered", "description": "key=value|key=value"},
-            {"name": "custom", "kind": "specification-conditioned", "description": "User-defined separator and key/value syntax"},
+            {
+                "name": "custom",
+                "kind": "specification-conditioned",
+                "description": "User-defined separator and key/value syntax",
+                "endpoint": "/translate",
+                "available_in_web_api": True,
+            },
+            {
+                "name": "json",
+                "kind": "registered-codec",
+                "description": "JSON codec in the research translation library",
+                "endpoint": None,
+                "available_in_web_api": False,
+            },
+            {
+                "name": "csv",
+                "kind": "registered-codec",
+                "description": "CSV codec in the research translation library",
+                "endpoint": None,
+                "available_in_web_api": False,
+            },
+            {
+                "name": "pipe",
+                "kind": "registered-codec",
+                "description": "Pipe-delimited codec in the research translation library",
+                "endpoint": None,
+                "available_in_web_api": False,
+            },
         ]
     }
 
@@ -128,7 +169,9 @@ def translate(req: TranslateRequest):
             model_version=f"neurocodec-{APP_VERSION}",
             chain="arc-mainnet",
         )
-
+        digest = receipt.digest()
+        secret = os.getenv("NEUROCODEC_RECEIPT_SECRET", "")
+        signature = _receipt_signature(digest, secret) if secret else ""
         recipient = os.getenv("ARC_RECIPIENT_ADDRESS", "")
         intent = settlement.payment_intent(receipt, "0.01", recipient)
 
@@ -137,10 +180,41 @@ def translate(req: TranslateRequest):
             "latent": latent,
             "adaptation_loss": losses,
             "latency_ms": round((perf_counter() - start) * 1000, 3),
-            "receipt_digest": receipt.digest(),
+            "receipt_digest": digest,
+            "receipt_signature": signature,
             "receipt": receipt.__dict__,
             "arc": intent,
         }
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.post("/verify-payment")
+def verify_payment(req: VerifyPaymentRequest):
+    recipient = os.getenv("ARC_RECIPIENT_ADDRESS", "")
+    secret = os.getenv("NEUROCODEC_RECEIPT_SECRET", "")
+    if not recipient or not secret:
+        raise HTTPException(
+            status_code=503,
+            detail="ARC_RECIPIENT_ADDRESS and NEUROCODEC_RECEIPT_SECRET must be configured.",
+        )
+    if not re.fullmatch(r"[0-9a-f]{64}", req.receipt_digest):
+        raise HTTPException(status_code=422, detail="receipt_digest must be a lowercase SHA-256 hex digest.")
+    if not re.fullmatch(r"[0-9a-f]{64}", req.receipt_signature):
+        raise HTTPException(status_code=422, detail="receipt_signature must be a lowercase HMAC-SHA256 hex signature.")
+    expected_signature = _receipt_signature(req.receipt_digest, secret)
+    if not hmac.compare_digest(expected_signature, req.receipt_signature):
+        raise HTTPException(status_code=422, detail="Receipt signature is invalid.")
+    try:
+        return settlement.verify_payment(
+            req.transaction_hash,
+            req.receipt_digest,
+            req.receipt_signature,
+            recipient,
+            amount_usdc="0.01",
+        )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except RuntimeError as exc:

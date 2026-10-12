@@ -41,9 +41,12 @@ Set this Vercel environment variable:
 
 ```
 ARC_RECIPIENT_ADDRESS=0xYOUR_ARC_MAINNET_WALLET
+NEUROCODEC_RECEIPT_SECRET=<long-random-secret>
 ```
 
-No private key is required. The user's connected wallet signs the payment.
+No private key is required. The user's connected wallet signs the payment. `NEUROCODEC_RECEIPT_SECRET` must be a long, randomly generated secret (keep it private and do not commit it). The API HMAC-signs receipt digests with this secret; payment verification rejects unsigned or invalidly signed receipts. Configure both environment variables in Vercel and redeploy.
+
+The browser sends a native USDC transfer with `neurocodec:<receipt-digest>:<signature>` in transaction data. `/api/verify-payment` checks the signature, Arc Mainnet chain ID, transaction recipient, exact amount, transaction data, and successful mined receipt. A transaction submission alone is not considered a verified payment. The `/formats` response now distinguishes custom format support in the web API from codecs that are only registered in the research library.
 
 The production app rejects Arc Testnet configuration and only accepts chain ID **5042**.
 
