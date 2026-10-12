@@ -17,7 +17,8 @@ def test_receipt_hashes_are_stable():
     assert len(a.digest()) == 64
 
 
-def test_payment_intent():
+def test_payment_intent(monkeypatch):
+    monkeypatch.delenv("NEUROCODEC_RECEIPT_SECRET", raising=False)
     receipt = create_receipt("job", {"a": 1}, "a=1", {"name": "x"})
     intent = ArcSettlement().payment_intent(receipt, "0.01", VALID_ADDRESS)
     assert intent["asset"] == "USDC"
