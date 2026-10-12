@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "neurocodec"
-version = "1.1.0"
+version = "1.3.0"
 description = "Experimental neural translation between structured data representations with Arc Mainnet settlement"
 requires-python = ">=3.10"
 dependencies = [
